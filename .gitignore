@@ -1,3 +1,7 @@
+# Ignores unique to this repo:
+credentials.py
+
+# Below is github .gitignore default for python repositories:
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
