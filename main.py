@@ -4,9 +4,8 @@ from selenium.webdriver import Firefox, FirefoxOptions, FirefoxProfile
 
 from jstris import Jstris
 
-def dump(obj):
-	for attr in dir(obj):
-		print("obj.%s = %r" % (attr, getattr(obj, attr)))
+import time
+import sys
 
 if __name__ == '__main__':
 	profile = FirefoxProfile()
@@ -15,7 +14,13 @@ if __name__ == '__main__':
 
 	try:
 		jstris = Jstris(driver)
-		jstris.make_lobby()
-		x = input('...')
+		jstris.log_in()
+		jstris.go_to_live()
+		jstris.enter_spectator_mode()
+		while True:
+			print(jstris.get_players())
+			sys.stdout.flush()
+			time.sleep(1)
 	finally:
+		time.sleep(5)
 		driver.quit()
