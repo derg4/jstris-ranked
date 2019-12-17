@@ -7,7 +7,10 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+import operator
+import pprint
 import time
+import sys
 
 jstris_url = 'https://jstris.jezevec10.com'
 
@@ -23,7 +26,7 @@ class Jstris:
 		self.driver.find_element_by_name('password').send_keys(jstris_creds['password'] + Keys.ENTER)
 		self.wait(EC.title_contains(jstris_creds['username']))
 
-	def set_up_game(self):
+	def set_up_lobby(self):
 		self.go_to_practice()
 		join_link = self.create_lobby()
 
@@ -57,8 +60,104 @@ class Jstris:
 		self.check_box('hostStart')
 		self.click_button('create')
 
-		# Both waits for lobby to load and returns a useful value
-		return self.get_join_link()
+		# Waits for lobby to load and gets a useful value
+		join_link = self.get_join_link()
+		self.setup_script()
+
+		return join_link
+
+	def setup_script(self):
+		self.driver.execute_script("""
+			window.game = null;
+			var gud = Game.prototype.update;
+			Game.prototype.update = function() {
+				gud.apply(this, arguments);
+				window.game = this;
+			};
+
+			window.gameResults = null;
+			var dr = Live.prototype.displayResults;
+			Live.prototype.displayResults = function() {
+				dr.apply(this, arguments);
+				window.gameResults = arguments[0];
+				console.log("Game ended!"); // TODO remove
+			};""");
+		time.sleep(1)
+
+	def start_game(self):
+		self.driver.execute_script("window.gameResults = null")
+		#self.click_button('res')
+		self.clients = self.get_clients()
+
+		player_ids = self.get_player_ids()
+		self.players = set()
+		for player_id in player_ids:
+			pid_str = str(player_id)
+			if pid_str in self.clients:
+				self.players.add(self.clients[pid_str])
+			else:
+				print("Player ID %s not in clients!" % pid_str)
+
+		pp = pprint.PrettyPrinter()
+		print("Clients:")
+		pp.pprint(self.clients)
+		print("Players:")
+		print(self.players)
+		sys.stdout.flush()
+
+	def wait_for_game_end(self):
+		while True:
+			self.check_connection()
+			if self.has_game_ended():
+				return
+			time.sleep(0.5)
+
+	def get_game_results(self):
+		results = self.driver.execute_script("return window.gameResults")
+		pp = pprint.PrettyPrinter()
+		print("Results:")
+		pp.pprint(results)
+		results_players = set()
+
+		for (place, result) in enumerate(results, start=1):
+			pid_str = str(result['c'])
+			if pid_str in self.clients:
+				name = self.clients[pid_str]
+				results_players.add(name)
+			else:
+				name = "UNKNOWN"
+
+			if not result['forfeit']:
+				print("#%2s: %s" % (place, name))
+			else:
+				print(" FF: %s" % name)
+
+		missing_players = self.players - results_players
+		for name in missing_players:
+			print(" MP: %s" % name)
+
+		sys.stdout.flush()
+
+	# Returns a dictionary of player id string -> player name
+	def get_clients(self):
+		return self.driver.execute_script("""
+			var clients = {};
+			for (client in game.Live.clients) {
+				clients[client.toString()] = game.Live.clients[client].name;
+			};
+			return clients;
+		""")
+
+	def get_player_ids(self):
+		return self.driver.execute_script("return game.Live.players")
+
+	def check_connection(self):
+		if not self.driver.execute_script("return game.Live.connected"):
+			print('We were disconnected!')
+			raise DisconnectionException()
+
+	def has_game_ended(self):
+		return self.driver.execute_script("return gameResults != null")
 
 	def enter_spectator_mode(self):
 		self.send_chat('/spec')
@@ -95,3 +194,6 @@ class Jstris:
 
 	def wait(self, condition):
 		return WebDriverWait(self.driver, self.timeout).until(condition)
+
+class DisconnectionException(Exception):
+	pass

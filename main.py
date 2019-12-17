@@ -17,10 +17,15 @@ if __name__ == '__main__':
 		jstris.log_in()
 		jstris.go_to_live()
 		jstris.enter_spectator_mode()
+		jstris.setup_script()
 		while True:
-			print(jstris.get_players())
-			sys.stdout.flush()
-			time.sleep(1)
+			jstris.start_game()
+			jstris.wait_for_game_end()
+			jstris.get_game_results()
+	except Exception as e:
+		print("Exc:", e)
+		input("...")
+		raise e
 	finally:
 		time.sleep(5)
 		driver.quit()
