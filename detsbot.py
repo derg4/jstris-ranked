@@ -6,12 +6,10 @@ from discord import Game
 
 from credentials import discord_creds
 
-#import sys
-
 # Discord.py:     https://discordpy.readthedocs.io/en/latest/api.html
 # Discord.py ext: https://discordpy.readthedocs.io/en/latest/ext/commands/api.html
 
-class DetsBot(commands.Cog):
+class JstrisCog(commands.Cog):
 	"""Discord.py Cog, which implements the discord bot interface"""
 	def __init__(self, bot):
 		self.bot = bot
@@ -42,12 +40,28 @@ class DetsBot(commands.Cog):
 		"""Either creates a lobby for a jstris match, or sends the link to an existing lobby."""
 		await ctx.send('Not yet, but soon')
 
-def main():
-	"""Starts up the DetsBot discord bot by itself, for testing"""
+	@commands.command('eval')
+	@commands.is_owner()
+	async def eval_cmd(self, ctx, *, expr):
+		"""Calls eval() on expr, and sends back the result. Owner only."""
+		#pylint: disable=eval-used
+		ret = eval(expr, globals(), locals())
+		await ctx.send(str(ret))
+
+	@commands.command()
+	@commands.is_owner()
+	async def await_eval(self, ctx, *, expr):
+		"""Calls eval() on expr, awaits the result, and sends back the result of that. Owner only."""
+		#pylint: disable=eval-used
+		ret = await eval(expr, globals(), locals())
+		await ctx.send(str(ret))
+
+def start_bot():
+	"""Starts up the DetsBot discord bot"""
 	cmd_prefix = '!'
 	detsbot = commands.Bot(command_prefix=[cmd_prefix], description='Detectives\' Jstris Bot')
-	detsbot.add_cog(DetsBot(detsbot))
+	detsbot.add_cog(JstrisCog(detsbot))
 	detsbot.run(discord_creds['token'])
 
 if __name__ == '__main__':
-	main()
+	start_bot()
