@@ -4,12 +4,7 @@
 from player import Player
 
 def clamp(num, smallest, largest):
-	"""Clamps num between the given bounds.
-
-	num -- the number to clamp
-	smallest -- if num is smaller than this, returns smallest
-	largest -- if num is larger than this, returns largest
-	"""
+	"""Clamps num between the given bounds."""
 	return max(smallest, min(num, largest))
 
 class Elo:
@@ -29,13 +24,11 @@ class Elo:
 
 		# For each matchup, simulate a game
 		for i in range(num_players - 1):
-			player1 = players_scores[i][0]
 			for j in range(i + 1, num_players):
-				player2 = players_scores[j][0]
 				(p1_delta, p2_delta) = self.calc_score_changes_2p(players_scores[i], players_scores[j], k_mult)
 				score_changes[i] += p1_delta
 				score_changes[j] += p2_delta
-				print("Score change: %s (%+s) vs %s (%+s)" % (player1.name, p1_delta, player2.name, p2_delta))
+				#print("Score change: %s (%+s) vs %s (%+s)" % (player1.name, p1_delta, player2.name, p2_delta))
 
 		print("New ratings:")
 		for (i, (player, _)) in enumerate(players_scores):

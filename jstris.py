@@ -9,6 +9,7 @@ import asyncio
 
 from selenium.webdriver import Firefox, FirefoxProfile
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -85,10 +86,15 @@ class Jstris:
 	async def go_to_live(self):
 		"""Go to a live public game lobby."""
 		loop = asyncio.get_running_loop()
-		return await loop.run_in_executor(None, self.__go_to_live)
+		await loop.run_in_executor(None, self.__go_to_live)
+
+		signedin_xpath = '//div[@class="chl srv"][contains(text(), "You are signed in as")]'
+		await self.async_wait(EC.presence_of_element_located((By.XPATH, signedin_xpath)))
 
 	def __go_to_live(self):
+		self.__log_in()
 		self.driver.get(JSTRIS_URL)
+		self.__setup_script()
 
 	async def go_to_practice(self):
 		"""Go to a practice room."""
@@ -128,29 +134,22 @@ class Jstris:
 		time.sleep(0.1)
 
 	async def start_game(self):
-		"""Go to a practice room."""
+		"""Start a game in the private room."""
+		# TODO actually start game if we're in a private room
 		loop = asyncio.get_running_loop()
-		return await loop.run_in_executor(None, self.__start_game)
+		await loop.run_in_executor(None, self.__start_game)
 
 	def __start_game(self):
-		"""Start a game in the private room."""
 		self.driver.execute_script("window.gameResults = null")
 		self.clients = self.get_clients()
 
-		player_ids = self.get_player_ids()
 		self.players = set()
+		player_ids = self.get_player_ids()
 		for player_id in player_ids:
-			pid_str = str(player_id)
-			if pid_str in self.clients:
-				self.players.add(self.clients[pid_str])
-			else:
-				print("Player ID %s not in clients!" % pid_str)
+			self.players.add(player_id)
 
-		pprinter = pprint.PrettyPrinter()
-		print("Clients:")
-		pprinter.pprint(self.clients)
 		print("Players:")
-		print(self.players)
+		print(set(self.clients.get(pid, "UNKNOWN") for pid in self.players))
 		sys.stdout.flush()
 
 	async def wait_for_game_end(self):
@@ -164,42 +163,49 @@ class Jstris:
 	def get_game_results(self):
 		"""Get the results of the last game that was played in this room."""
 		results = self.driver.execute_script("return window.gameResults")
-		pprinter = pprint.PrettyPrinter()
-		print("Results:")
-		pprinter.pprint(results)
 		results_players = set()
 
-		for (place, result) in enumerate(results, start=1):
-			pid_str = str(result['c'])
-			if pid_str in self.clients:
-				name = self.clients[pid_str]
-				results_players.add(name)
-			else:
-				name = "UNKNOWN"
+		results_list = []
+		for result in results:
+			if result['forfeit']:
+				continue
 
-			if not result['forfeit']:
-				print("#%2s: %s" % (place, name))
-			else:
-				print(" FF: %s" % name)
+			player_id = result['c']
+			results_players.add(player_id)
+			name = self.clients.get(player_id, 'UNKNOWN')
+
+			results_list.append({'id': result['c'], 'name': name, 'score': float(result['t'])})
 
 		missing_players = self.players - results_players
-		for name in missing_players:
-			print(" MP: %s" % name)
+		for player_id in missing_players:
+			results_list.append({'id': player_id,
+			                     'name': self.clients.get(player_id, 'UNKNOWN'),
+			                     'score': 0.0})
 
+		print("Results:")
+		pprinter = pprint.PrettyPrinter()
+		pprinter.pprint(results_list)
 		sys.stdout.flush()
+
+		return results_list
 
 	def get_clients(self):
 		"""Get the list of other people in the room, players or spectators.
 
 		Returns a dictionary of player_id -> player_name
 		"""
-		return self.driver.execute_script("""
+		raw_clients = self.driver.execute_script("""
 			var clients = {};
-			for (client in game.Live.clients) {
-				clients[client.toString()] = game.Live.clients[client].name;
+			for (client in window.game.Live.clients) {
+				clients[client] = window.game.Live.clients[client].name;
 			};
 			return clients;
 		""")
+
+		clients = {}
+		for (pid_str, name) in raw_clients.items():
+			clients[int(pid_str)] = name
+		return clients
 
 	def get_player_ids(self):
 		"""Get the list of player ids of players playing, who have lost, or are waiting for a game."""
@@ -207,9 +213,7 @@ class Jstris:
 
 	def check_connection(self):
 		"""Raise an exception if the client javascript thinks we are disconnected."""
-		if not self.driver.execute_script("return game.Live.connected"):
-			print('We were disconnected!')
-			raise DisconnectionException()
+		self.wait_js("return window.game != null && window.game.Live.connected")
 
 	def has_game_ended(self):
 		"""Returns True if a game has ended since calling start_game()"""
@@ -253,19 +257,29 @@ class Jstris:
 		"""Wait for a condition on the current webpage."""
 		return WebDriverWait(self.driver, self.timeout).until(condition)
 
-	async def async_wait(self, condition):
+	def wait_js(self, javascript):
+		"""Wait for a javascript expression to return true."""
+		return self.wait(lambda driver: driver.execute_script(javascript))
+
+	async def async_wait(self, condition, message=''):
 		"""Wait for a condition on the current webpage."""
 		end_time = time.perf_counter() + self.timeout
+		screen = None
+		stacktrace = None
 		while True:
-			value = condition(self.driver)
-			if value:
-				return value
+			try:
+				value = condition(self.driver)
+				if value:
+					return value
+			except NoSuchElementException as exc:
+				screen = getattr(exc, 'screen', None)
+				stacktrace = getattr(exc, 'stacktrace', None)
 			await asyncio.sleep(0.1)
 			if time.perf_counter() > end_time:
-				raise TimeoutException()
+				raise TimeoutException(message, screen, stacktrace)
 
 class DisconnectionException(Exception):
 	"""An exception that is raised if we are disconnected from the jstris server."""
 
-class TimeoutException(Exception):
-	"""An exception that is raised if we are timed out while waiting for something."""
+#class TimeoutException(Exception):
+#	"""An exception that is raised if we are timed out while waiting for something."""
