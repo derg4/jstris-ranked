@@ -144,7 +144,7 @@ class Jstris:
 		self.clients = self.get_clients()
 
 		self.players = set()
-		player_ids = self.get_player_ids()
+		player_ids = self.get_registered_players()
 		for player_id in player_ids:
 			self.players.add(player_id)
 
@@ -163,17 +163,20 @@ class Jstris:
 	def get_game_results(self):
 		"""Get the results of the last game that was played in this room."""
 		results = self.driver.execute_script("return window.gameResults")
+		self.driver.execute_script("window.oldGameResults = window.gameResults")
 		results_players = set()
 
 		results_list = []
 		for result in results:
+			player_id = result['c']
+			name = self.clients.get(player_id, 'UNKNOWN')
 			if result['forfeit']:
 				continue
+			if player_id not in self.players:
+				print('Ignoring %s, unregistered' % name)
+				continue
 
-			player_id = result['c']
 			results_players.add(player_id)
-			name = self.clients.get(player_id, 'UNKNOWN')
-
 			results_list.append({'id': result['c'], 'name': name, 'score': float(result['t'])})
 
 		missing_players = self.players - results_players
@@ -206,6 +209,20 @@ class Jstris:
 		for (pid_str, name) in raw_clients.items():
 			clients[int(pid_str)] = name
 		return clients
+
+	def get_registered_players(self):
+		"""Get the list of players who are logged in."""
+		return self.driver.execute_script(r"""
+			var players = [];
+			for (var i = 0; i < game.Live.players.length; i++) {
+				var player = game.Live.players[i];
+				var regex = /^<a href="\/u\/.+" target="_blank">.*<\/a>$/;
+				if (game.Live.getName(player).match(regex)) {
+					players.push(player);
+				}
+			}
+			return players;
+		""")
 
 	def get_player_ids(self):
 		"""Get the list of player ids of players playing, who have lost, or are waiting for a game."""
