@@ -1,6 +1,8 @@
 #! /usr/bin/env python3
 """Mediates the interaction between UI (detsbot) and other layers (jstris, elo, etc)."""
 
+import asyncio
+
 from elo import Elo
 
 class JstrisModel():
@@ -11,25 +13,39 @@ class JstrisModel():
 		self.elo = Elo()
 
 	async def watch_live(self):
-		"""Watches live matches forever"""
+		"""Watches live matches until quit_watching is called."""
 		await self.jstris.go_to_live()
 		self.jstris.enter_spectator_mode()
 		while True:
+			await self.jstris.start_game_live()
+			await self.jstris.wait_for_game_end()
+			yield self._process_game_results(self.jstris.get_game_results())
+
+	async def create_lobby(self):
+		"""Creates a lobby and returns the join link."""
+		return await self.jstris.get_lobby()
+
+	async def watch_lobby(self):
+		"""Assumes a lobby is created, and runs the game."""
+		self.jstris.enter_spectator_mode()
+		while True:
+			await asyncio.sleep(10)
 			await self.jstris.start_game()
 			await self.jstris.wait_for_game_end()
+			yield self._process_game_results(self.jstris.get_game_results())
 
-			raw_results = self.jstris.get_game_results()
-			results = [(self.database.get(res['id'], res['name']), res['score']) for res in raw_results]
+	def _process_game_results(self, raw_results):
+		raw_results = self.jstris.get_game_results()
+		results = [(self.database.get(res['id'], res['name']), res['score']) for res in raw_results]
 
-			elo_result = self.elo.report_game(results)
-			if elo_result is None:
-				yield None
-				continue
+		elo_result = self.elo.report_game(results)
+		if elo_result is None:
+			return None
 
-			(players, scores, score_changes) = elo_result
-			for player in players:
-				self.database.save(player)
-			yield zip(players, scores, score_changes)
+		(players, scores, score_changes) = elo_result
+		for player in players:
+			self.database.save(player)
+		return zip(players, scores, score_changes)
 
 	async def quit_watching(self):
 		"""Quits watching matches"""

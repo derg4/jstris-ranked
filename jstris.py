@@ -138,6 +138,11 @@ class Jstris:
 			};""")
 		time.sleep(0.1)
 
+	async def start_game_live(self):
+		"""Simulate starting a game (when we're watching live)."""
+		loop = asyncio.get_running_loop()
+		await loop.run_in_executor(None, self.__start_game_setup)
+
 	async def start_game(self):
 		"""Start a game in the private room."""
 		# TODO actually start game if we're in a private room
@@ -145,6 +150,10 @@ class Jstris:
 		await loop.run_in_executor(None, self.__start_game)
 
 	def __start_game(self):
+		self.__click_button('res')
+		self.__start_game_setup()
+
+	def __start_game_setup(self):
 		self.driver.execute_script("window.gameResults = null")
 		self.clients = self.get_clients()
 
