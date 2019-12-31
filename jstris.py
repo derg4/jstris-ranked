@@ -46,6 +46,11 @@ class Jstris:
 
 		return self.lobby
 
+	async def log_in(self):
+		"""Usually unneeded, logs in"""
+		loop = asyncio.get_running_loop()
+		await loop.run_in_executor(None, self.__log_in)
+
 	def __log_in(self):
 		self.driver.get(JSTRIS_URL + '/login')
 		if jstris_creds['username'] in self.driver.title:

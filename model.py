@@ -20,9 +20,20 @@ class JstrisModel():
 
 			raw_results = self.jstris.get_game_results()
 			results = [(self.database.get(res['id'], res['name']), res['score']) for res in raw_results]
-			self.elo.report_game(results)
-			for (player, _) in results:
+
+			elo_result = self.elo.report_game(results)
+			if elo_result is None:
+				yield None
+				continue
+
+			(players, scores, score_changes) = elo_result
+			for player in players:
 				self.database.save(player)
+			yield zip(players, scores, score_changes)
+
+	async def quit_watching(self):
+		"""Quits watching matches"""
+		await self.jstris.log_in()
 
 	def run(self):
 		"""Set up the various modules and wait for input from detsbot."""

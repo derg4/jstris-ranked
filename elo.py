@@ -18,7 +18,9 @@ class Elo:
 		players_scores -- list of (player, score), player is a Player, score is numeric
 		"""
 		num_players = len(players_scores)
-		score_changes = [0 for _ in range(num_players)]
+		score_changes = [0.0 for _ in range(num_players)]
+		if num_players <= 1:
+			return None
 
 		k_mult = 1 / (num_players - 1)
 
@@ -34,6 +36,9 @@ class Elo:
 		for (i, (player, _)) in enumerate(players_scores):
 			player.rating += score_changes[i]
 			print("%s: %s (%+s)" % (player.name, player.rating, score_changes[i]))
+
+		(players, scores) = zip(*players_scores)
+		return (players, scores, score_changes)
 
 	def calc_score_changes_2p(self, player_score_1, player_score_2, k_mult):
 		"""Calculate the amount each player's rating should shift in a 2-player game.
