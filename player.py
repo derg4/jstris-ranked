@@ -1,8 +1,7 @@
 #! /usr/bin/env python3
 
 class Player:
-	def __init__(self, player_id, name, rating=1000, k=32):
-		self.id = str(player_id)
+	def __init__(self, name, rating=1000, k=32):
 		self.name = str(name)
 		self.rating = rating
 		self.k = k

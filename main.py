@@ -5,7 +5,7 @@ import asyncio
 import sys
 import time
 
-from database import MemoryDatabase
+from database import SQLiteDatabase
 import detsbot
 from jstris import Jstris
 from model import JstrisModel
@@ -18,7 +18,7 @@ def dump(*args, **kwargs):
 async def main():
 	"""Sets up everything from the different modules and starts the discord bot."""
 	try:
-		database = MemoryDatabase()
+		database = SQLiteDatabase()
 		jstris = Jstris()
 		model = JstrisModel(jstris, database)
 

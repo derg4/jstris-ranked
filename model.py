@@ -36,7 +36,7 @@ class JstrisModel():
 
 	def _process_game_results(self, raw_results):
 		raw_results = self.jstris.get_game_results()
-		results = [(self.database.get(res['id'], res['name']), res['score']) for res in raw_results]
+		results = [(self.database.get(res['name']), res['score']) for res in raw_results]
 
 		elo_result = self.elo.report_game(results)
 		if elo_result is None:
@@ -45,6 +45,8 @@ class JstrisModel():
 		(players, scores, score_changes) = elo_result
 		for player in players:
 			self.database.save(player)
+		self.database.commit()
+
 		return zip(players, scores, score_changes)
 
 	async def quit_watching(self):

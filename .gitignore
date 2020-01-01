@@ -1,5 +1,6 @@
 # Ignores unique to this repo:
 credentials.py
+players.db
 
 # Below is github .gitignore default for python repositories:
 # Byte-compiled / optimized / DLL files
