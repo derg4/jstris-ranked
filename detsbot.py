@@ -102,7 +102,7 @@ class JstrisCog(commands.Cog):
 			if game_result is None:
 				res_strs.append('No change recorded (need at least 2 registered players)')
 			else:
-				res_strs.append('<Player> <Time>: <New_Rating> (Change)')
+				res_strs.append('   <Player Name> <Time>:   <New_Rating> (Change)')
 				for (player, score, delta) in game_result:
 					res_strs.append('%16s %6.2fs: rating %7.2f (%+5.2f)' %
 					                (player.name, float(score), player.rating, delta))

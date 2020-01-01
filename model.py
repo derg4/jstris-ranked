@@ -28,7 +28,13 @@ class JstrisModel():
 	async def watch_lobby(self):
 		"""Assumes a lobby is created, and runs the game."""
 		self.jstris.enter_spectator_mode()
+		starting_in = 'Starting next game in %s seconds...'
 		while True:
+			self.jstris.send_chat(starting_in % 30)
+			await asyncio.sleep(10)
+			self.jstris.send_chat(starting_in % 20)
+			await asyncio.sleep(10)
+			self.jstris.send_chat(starting_in % 10)
 			await asyncio.sleep(10)
 			await self.jstris.start_game()
 			await self.jstris.wait_for_game_end()

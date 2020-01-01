@@ -18,7 +18,7 @@ def dump(*args, **kwargs):
 async def main():
 	"""Sets up everything from the different modules and starts the discord bot."""
 	try:
-		database = SQLiteDatabase()
+		database = SQLiteDatabase('players.db')
 		jstris = Jstris()
 		model = JstrisModel(jstris, database)
 

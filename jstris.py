@@ -252,9 +252,9 @@ class Jstris:
 
 	def enter_spectator_mode(self):
 		"""Send /spec to the chat, entering spectator mode."""
-		self.__send_chat('/spec')
+		self.send_chat('/spec')
 
-	def __send_chat(self, text):
+	def send_chat(self, text):
 		"""Send text to the chat box."""
 		self.driver.find_element_by_id('chatInput').send_keys(text + Keys.ENTER)
 

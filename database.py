@@ -52,8 +52,8 @@ class MemoryDatabase(PlayerDatabase):
 
 class SQLiteDatabase(PlayerDatabase):
 	"""Uses SQLite to store player information."""
-	def __init__(self):
-		self.conn = sqlite3.connect('players.db')
+	def __init__(self, db_file):
+		self.conn = sqlite3.connect(db_file)
 		cursor = self.conn.cursor()
 		cursor.execute('CREATE TABLE IF NOT EXISTS players (name TEXT PRIMARY KEY, rating REAL)')
 		self.conn.commit()
@@ -95,7 +95,7 @@ def _dummy_init(sqldb):
 	sqldb.save(alice).save(bob).save(charlie).commit()
 
 def _main():
-	sqldb = SQLiteDatabase()
+	sqldb = SQLiteDatabase('debug_players.db')
 	#_dummy_init(sqldb)
 	for player in sqldb.get_all():
 		dump('%s: %s' % (player.name, player.rating))
