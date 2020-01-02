@@ -67,7 +67,7 @@ class Jstris:
 		join_link = self.__create_lobby()
 
 		# Go to spectator mode
-		self.__send_chat('/spec')
+		self.send_chat('/spec')
 		return join_link
 
 	def __create_lobby(self):
@@ -145,7 +145,6 @@ class Jstris:
 
 	async def start_game(self):
 		"""Start a game in the private room."""
-		# TODO actually start game if we're in a private room
 		loop = asyncio.get_running_loop()
 		await loop.run_in_executor(None, self.__start_game)
 

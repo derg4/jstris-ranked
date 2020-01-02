@@ -36,9 +36,22 @@ class JstrisModel():
 			await asyncio.sleep(10)
 			self.jstris.send_chat(starting_in % 10)
 			await asyncio.sleep(10)
+			self.jstris.send_chat('Starting now!')
 			await self.jstris.start_game()
 			await self.jstris.wait_for_game_end()
 			yield self._process_game_results(self.jstris.get_game_results())
+
+	def get_leaderboard(self, page=1, page_size=20):
+		"""Returns a list of the top rated players (20 per page by default)."""
+		return self.database.get_leaderboard(page_size, (page - 1) * page_size)
+
+	def simulate_1v1(self, player1, player2):
+		"""Returns player1's estimated winrate against player2."""
+		return self.elo.estimate_score_vs_one(player1.rating, player2.rating)
+
+	def get_player(self, name):
+		"""Returns the player (None if not found)."""
+		return self.database.get(name, init_if_not_found=False)
 
 	def _process_game_results(self, raw_results):
 		raw_results = self.jstris.get_game_results()

@@ -122,6 +122,43 @@ class JstrisCog(commands.Cog):
 				return
 
 	@commands.command()
+	async def leaderboard(self, ctx, page: int = 1):
+		"""Displays the top rated players."""
+		page_size = 10
+		players = self.model.get_leaderboard(page, page_size)
+		await ctx.send('```        <Player Name>: <Rating>\n' +
+		               '\n'.join('#%-3d %16s: %7.2f' %
+		                         ((i + 1 + page_size * (page - 1)), player.name, player.rating)
+		                         for (i, player) in enumerate(players)) +
+		               '```')
+
+	@commands.command()
+	async def rank(self, ctx, name: str):
+		"""Displays the rank and rating of the given player (jstris name)."""
+		await ctx.send('Not implemented yet!')
+
+	@commands.command()
+	async def simulate(self, ctx, player1: str, player2: str):
+		"""Displays the predicted win rate between two players."""
+		p1_player = self.model.get_player(player1)
+		p2_player = self.model.get_player(player2)
+
+		messages = []
+		if p1_player is None:
+			messages.append('Player `{}` not found!'.format(player1))
+		if p2_player is None:
+			messages.append('Player `{}` not found!'.format(player2))
+
+		if len(messages) == 0:
+			p1_winrate = self.model.simulate_1v1(p1_player, p2_player)
+			msg = 'According to the mathematical model:```\n' \
+				'{0.name:16} ({0.rating:7.2f}) would win {1:5.2%} of the time.\n' \
+				'{2.name:16} ({2.rating:7.2f}) would win {3:5.2%} of the time.```'
+			messages.append(msg.format(p1_player, p1_winrate, p2_player, 1-p1_winrate))
+
+		await ctx.send('\n'.join(messages))
+
+	@commands.command()
 	@commands.is_owner()
 	async def quit(self, ctx):
 		"""Quits spectating after the current game."""
