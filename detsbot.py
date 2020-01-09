@@ -17,7 +17,7 @@ class JstrisCog(commands.Cog):
 	def __init__(self, bot, model=None):
 		self.bot = bot
 		self.model = model
-		self.watching = False
+		self.join_link = None
 		self.quit_flag = False
 
 	##### Bot Events #######################################################
@@ -45,15 +45,15 @@ class JstrisCog(commands.Cog):
 	@commands.is_owner()
 	async def watch_live(self, ctx):
 		"""Either creates a lobby for a jstris match, or sends the link to an existing lobby."""
-		if self.watching:
+		if self.join_link is not None:
 			if self.quit_flag:
 				await ctx.send('Cancelled the quit command')
 				self.quit_flag = False
 			else:
-				await ctx.send('Already watching a game')
+				await ctx.send('Already watching a game: {}'.format(self.join_link))
 			return
 		self.quit_flag = False
-		self.watching = True
+		self.join_link = "Live"
 
 		await ctx.send('Ok, watching')
 		async for game_result in self.model.watch_live():
@@ -71,31 +71,30 @@ class JstrisCog(commands.Cog):
 				# TODO: what do I do if the message is too long? >2000
 			except Exception as exc:
 				await self.model.quit_watching()
-				self.watching = False
+				self.join_link = None
 				raise exc
 
 			if self.quit_flag:
 				await ctx.send('Stopping watching')
 				await self.model.quit_watching()
-				self.watching = False
+				self.join_link = None
 				return
 
 	@commands.command()
 	async def jstris(self, ctx):
 		"""Either creates a lobby for a jstris match, or sends the link to an existing lobby."""
-		if self.watching:
+		if self.join_link is not None:
 			if self.quit_flag:
 				await ctx.send('Cancelled the quit command')
 				self.quit_flag = False
 			else:
-				await ctx.send('Already watching a game')
+				await ctx.send('Already watching a game: {}'.format(self.join_link))
 			return
 		self.quit_flag = False
-		self.watching = True
 
 		await ctx.send('Creating a lobby')
-		join_link = await self.model.create_lobby()
-		await ctx.send('Join link: <%s>' % join_link)
+		self.join_link = await self.model.create_lobby()
+		await ctx.send('Join link: <%s>' % self.join_link)
 
 		async for game_result in self.model.watch_lobby():
 			res_strs = []
@@ -112,13 +111,13 @@ class JstrisCog(commands.Cog):
 				# TODO: what do I do if the message is too long? >2000
 			except Exception as exc:
 				await self.model.quit_watching()
-				self.watching = False
+				self.join_link = None
 				raise exc
 
 			if self.quit_flag:
 				await ctx.send('Stopping watching')
 				await self.model.quit_watching()
-				self.watching = False
+				self.join_link = None
 				return
 
 	@commands.command()
@@ -162,7 +161,7 @@ class JstrisCog(commands.Cog):
 	@commands.is_owner()
 	async def quit(self, ctx):
 		"""Quits spectating after the current game."""
-		if self.watching:
+		if self.join_link is not None:
 			self.quit_flag = True
 			await ctx.send('Will stop watching after the current game')
 		else:
@@ -186,7 +185,7 @@ class JstrisCog(commands.Cog):
 
 async def start_bot(model=None):
 	"""Starts up the DetsBot discord bot"""
-	cmd_prefix = '!'
+	cmd_prefix = 'd/'
 	detsbot = commands.Bot(command_prefix=[cmd_prefix], description='Detectives\' Jstris Bot')
 
 	detsbot.add_cog(JstrisCog(detsbot, model))
