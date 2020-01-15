@@ -26,6 +26,9 @@ class Jstris:
 		self.driver = Firefox(firefox_profile=profile)
 
 		self.timeout = 10
+		self.reset()
+
+	def reset(self):
 		self.clients = None
 		self.players = None
 		self.lobby = None
@@ -52,6 +55,7 @@ class Jstris:
 		await loop.run_in_executor(None, self.__log_in)
 
 	def __log_in(self):
+		self.reset()
 		self.driver.get(JSTRIS_URL + '/login')
 		if jstris_creds['username'] in self.driver.title:
 			return
@@ -145,12 +149,75 @@ class Jstris:
 
 	async def start_game(self):
 		"""Start a game in the private room."""
-		loop = asyncio.get_running_loop()
-		await loop.run_in_executor(None, self.__start_game)
+		if await self.wait_for_ok_to_start_game():
+			loop = asyncio.get_running_loop()
+			await loop.run_in_executor(None, self.__start_game)
+
+			if self.is_ok_to_start_game():
+				self.send_chat("Starting now!")
+				return True
+
+		return False
+
+	async def wait_for_ok_to_start_game(self):
+		"""Wait for at least two players to join, and count down to game start, sending requisite chat messages.
+
+		Requires being in a private lobby.
+
+		Returns True if/when we can start the game, or False otherwise (if we time out)."""
+		wait_time = 300
+		wait_incr = 60
+		periodic_msg = "Will wait for up to {:d}s for at least two players to join."
+		start_time = time.perf_counter()
+		end_time = start_time + wait_time
+
+		while time.perf_counter() < end_time:
+			if not self.is_ok_to_start_game():
+				now = time.perf_counter()
+				incrs_waited = int((now - start_time) / wait_incr)
+				time_to_wait = (incrs_waited + 1) * wait_incr + start_time - now
+				self.send_chat(periodic_msg.format(int(round(end_time - now))))
+
+				try:
+					await self._wait_for_ok_to_start_game(time_to_wait)
+				except TimeoutException:
+					continue
+
+			if await self.count_down_to_start_game():
+				return True
+
+		self.send_chat("Not enough players to start game.")
+		return False
+
+	async def count_down_to_start_game(self):
+		"""Count down to the game start, checking intermittently if is_ok_to_start_game."""
+		wait_time = 30
+		wait_incr = 10
+		time_waited = 0
+		starting_in = 'Starting next game in {:d} seconds...'
+
+		while time_waited < wait_time:
+			if not self.is_ok_to_start_game():
+				return False
+
+			self.send_chat(starting_in.format(wait_time - time_waited))
+			await asyncio.sleep(wait_incr)
+			time_waited += wait_incr
+
+		return self.is_ok_to_start_game()
+
+	async def _wait_for_ok_to_start_game(self, timeout):
+		"""Wait for 2 players to join, using async_wait."""
+		return await self.async_wait(lambda driver: driver.execute_script("return game.Live.players.length >= 2"),
+		                             timeout=timeout)
+
+	def is_ok_to_start_game(self):
+		return self.driver.execute_script("return game.Live.players.length >= 2")
 
 	def __start_game(self):
 		self.__click_button('res')
 		self.__start_game_setup()
+		return len(self.players) >= 2
 
 	def __start_game_setup(self):
 		self.driver.execute_script("window.gameResults = null")
@@ -283,17 +350,22 @@ class Jstris:
 		join_link = self.wait(EC.presence_of_element_located((By.CLASS_NAME, 'joinLink')))
 		return join_link.text
 
-	def wait(self, condition):
+	def wait(self, condition, timeout=None):
 		"""Wait for a condition on the current webpage."""
+		if timeout is None:
+			timeout = self.timeout
 		return WebDriverWait(self.driver, self.timeout).until(condition)
 
-	def wait_js(self, javascript):
+	def wait_js(self, javascript, timeout=None):
 		"""Wait for a javascript expression to return true."""
-		return self.wait(lambda driver: driver.execute_script(javascript))
+		return self.wait(lambda driver: driver.execute_script(javascript), timeout=timeout)
 
-	async def async_wait(self, condition, message=''):
+	async def async_wait(self, condition, message='', timeout=None):
 		"""Wait for a condition on the current webpage."""
-		end_time = time.perf_counter() + self.timeout
+		if timeout is None:
+			timeout = self.timeout
+
+		end_time = time.perf_counter() + timeout
 		screen = None
 		stacktrace = None
 		while True:
@@ -307,6 +379,10 @@ class Jstris:
 			await asyncio.sleep(0.1)
 			if time.perf_counter() > end_time:
 				raise TimeoutException(message, screen, stacktrace)
+
+	async def async_wait_js(self, javascript, timeout=None):
+		"""Wait for a javascript expression to return true."""
+		return await self.async_wait(lambda driver: driver.execute_script(javascript), timeout=timeout)
 
 class DisconnectionException(Exception):
 	"""An exception that is raised if we are disconnected from the jstris server."""

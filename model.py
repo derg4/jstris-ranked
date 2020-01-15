@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 """Mediates the interaction between UI (detsbot) and other layers (jstris, elo, etc)."""
 
-import asyncio
+#import asyncio
 
 from elo import Elo
 
@@ -28,16 +28,9 @@ class JstrisModel():
 	async def watch_lobby(self):
 		"""Assumes a lobby is created, and runs the game."""
 		self.jstris.enter_spectator_mode()
-		starting_in = 'Starting next game in %s seconds...'
 		while True:
-			self.jstris.send_chat(starting_in % 30)
-			await asyncio.sleep(10)
-			self.jstris.send_chat(starting_in % 20)
-			await asyncio.sleep(10)
-			self.jstris.send_chat(starting_in % 10)
-			await asyncio.sleep(10)
-			self.jstris.send_chat('Starting now!')
-			await self.jstris.start_game()
+			if not await self.jstris.start_game():
+				return
 			await self.jstris.wait_for_game_end()
 			yield self._process_game_results(self.jstris.get_game_results())
 
@@ -54,6 +47,7 @@ class JstrisModel():
 		return self.database.get(name, init_if_not_found=False)
 
 	def _process_game_results(self, raw_results):
+		# TODO fix the disaster that happens when people enter a game more than once
 		raw_results = self.jstris.get_game_results()
 		results = [(self.database.get(res['name']), res['score']) for res in raw_results]
 

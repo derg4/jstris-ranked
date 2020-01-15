@@ -120,6 +120,11 @@ class JstrisCog(commands.Cog):
 				self.join_link = None
 				return
 
+		await ctx.send('Stopping watching (not enough players)')
+		await self.model.quit_watching()
+		self.join_link = None
+		return
+
 	@commands.command()
 	async def leaderboard(self, ctx, page: int = 1):
 		"""Displays the top rated players."""
