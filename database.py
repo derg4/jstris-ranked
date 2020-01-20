@@ -67,7 +67,7 @@ class SQLiteDatabase(PlayerDatabase):
 		cursor.execute('SELECT name,rating FROM players WHERE name LIKE ?', (name,))
 		row = cursor.fetchone()
 		if row is not None:
-			dump('Player %s exists with rating %s' % (name, row[0]))
+			dump('Player %s exists with rating %s' % (name, row[1]))
 			return Player(row[0], rating=row[1])
 
 		if not init_if_not_found:
