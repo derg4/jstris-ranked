@@ -1,1 +1,2 @@
-from .sqlite import PlayerDatabase, MemoryDatabase, SQLiteDatabase
+from .memory_db import MemoryDatabase
+from .sqlite_db import SQLiteDatabase

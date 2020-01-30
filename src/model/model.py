@@ -42,12 +42,12 @@ class JstrisModel():
 
 	def get_player(self, name):
 		"""Returns the player (None if not found)."""
-		return self.database.get(name, init_if_not_found=False)
+		return self.database.read_player(name, create_if_not_found=False)
 
 	def _process_game_results(self, raw_results):
 		# TODO fix the disaster that happens when people enter a game more than once
 		raw_results = self.jstris.get_game_results()
-		results = [(self.database.get(res['name']), res['score']) for res in raw_results]
+		results = [(self.database.read_player(res['name']), res['score']) for res in raw_results]
 
 		elo_result = self.elo.report_game(results)
 		if elo_result is None:
@@ -55,7 +55,7 @@ class JstrisModel():
 
 		(players, scores, score_changes) = elo_result
 		for player in players:
-			self.database.save(player)
+			self.database.update_player(player)
 		self.database.commit()
 
 		return zip(players, scores, score_changes)
