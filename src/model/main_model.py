@@ -2,35 +2,33 @@
 """Mediates the interaction between UI (detsbot) and other layers (jstris, elo, etc)."""
 
 from entities import Elo
+from model import GameInterface, GameState
 
 class JstrisModel():
 	"""Mediates the interaction between UI (detsbot) and other layers (jstris, elo, etc)."""
-	def __init__(self, jstris, database):
+	def __init__(self, jstris: GameInterface, database):
 		self.jstris = jstris
 		self.database = database
 		self.elo = Elo()
 
 	async def watch_live(self):
-		"""Watches live matches until quit_watching is called."""
-		await self.jstris.go_to_live()
-		self.jstris.enter_spectator_mode()
-		while True:
-			await self.jstris.start_game_live()
-			await self.jstris.wait_for_game_end()
-			yield self._process_game_results(self.jstris.get_game_results())
+		"""Starts watching live."""
+		if self.jstris.state != GameState.STOPPED:
+			return
 
-	async def create_lobby(self):
-		"""Creates a lobby and returns the join link."""
-		return await self.jstris.get_lobby()
+		await self.jstris.create_game(live=True)
 
 	async def watch_lobby(self):
-		"""Assumes a lobby is created, and runs the game."""
-		self.jstris.enter_spectator_mode()
-		while True:
-			if not await self.jstris.start_game():
-				return
-			await self.jstris.wait_for_game_end()
-			yield self._process_game_results(self.jstris.get_game_results())
+		"""Creates a new lobby, returns the join link."""
+		if self.jstris.state != GameState.STOPPED:
+			return
+
+		return await self.jstris.create_game(live=True)
+
+	async def run_matches(self):
+		"""Runs and processes the game matches."""
+		async for result in self.jstris.watch_and_get_results():
+			yield self._process_game_results(result)
 
 	def get_leaderboard(self, page=1, page_size=20):
 		"""Returns a list of the top rated players (20 per page by default)."""
@@ -46,7 +44,6 @@ class JstrisModel():
 
 	def _process_game_results(self, raw_results):
 		# TODO fix the disaster that happens when people enter a game more than once
-		raw_results = self.jstris.get_game_results()
 		results = [(self.database.read_player(res['name']), res['score']) for res in raw_results]
 
 		elo_result = self.elo.report_game(results)
@@ -62,7 +59,7 @@ class JstrisModel():
 
 	async def quit_watching(self):
 		"""Quits watching matches"""
-		await self.jstris.log_in()
+		await self.jstris.quit()
 
 	def run(self):
 		"""Set up the various modules and wait for input from detsbot."""

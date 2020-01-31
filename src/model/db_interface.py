@@ -1,3 +1,6 @@
+#! /usr/bin/env python3
+"""The abstract interface for a database to store Players and Games."""
+
 from abc import ABC, abstractmethod
 
 class DatabaseInterface(ABC):

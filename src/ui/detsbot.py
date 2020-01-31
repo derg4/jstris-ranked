@@ -2,12 +2,17 @@
 """Handles the interaction with discord."""
 
 import asyncio
+import logging
 import sys
+import traceback
 
 from discord.ext import commands
 from discord import Game
 
 from credentials import discord_creds
+from entities import MyLogger
+
+logger = logging.getLogger('detsbot')
 
 # Discord.py:     https://discordpy.readthedocs.io/en/latest/api.html
 # Discord.py ext: https://discordpy.readthedocs.io/en/latest/ext/commands/api.html
@@ -35,6 +40,9 @@ class JstrisCog(commands.Cog):
 	@commands.Cog.listener()
 	async def on_command_error(self, ctx, error):
 		"""Bot event that gets called when an error occurs"""
+		logger.error('Error processing this message by {}: "{}"'.format(ctx.author, ctx.message.content))
+		logger.exception(error)
+
 		await ctx.send(str(error))
 		if not isinstance(error, commands.MissingRequiredArgument):
 			raise error
@@ -56,7 +64,9 @@ class JstrisCog(commands.Cog):
 		self.join_link = "Live"
 
 		await ctx.send('Ok, watching')
-		async for game_result in self.model.watch_live():
+		await self.model.watch_live()
+
+		async for game_result in self.model.run_matches():
 			res_strs = []
 			if game_result is None:
 				res_strs.append('No change recorded (need at least 2 registered players)')
@@ -93,10 +103,10 @@ class JstrisCog(commands.Cog):
 		self.quit_flag = False
 
 		await ctx.send('Creating a lobby')
-		self.join_link = await self.model.create_lobby()
+		self.join_link = await self.model.watch_lobby()
 		await ctx.send('Join link: <%s>' % self.join_link)
 
-		async for game_result in self.model.watch_lobby():
+		async for game_result in self.model.run_matches():
 			res_strs = []
 			if game_result is None:
 				res_strs.append('No change recorded (need at least 2 registered players)')

@@ -2,8 +2,8 @@
 """Handles the interaction with the jstris website."""
 
 import pprint
-import time
 import sys
+import time
 
 import asyncio
 
@@ -15,117 +15,141 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from credentials import jstris_creds
+from model import GameInterface, GameState
 
 JSTRIS_URL = 'https://jstris.jezevec10.com'
 
-class Jstris:
+async def _run_in_executor(func, *args):
+	loop = asyncio.get_running_loop()
+	return await loop.run_in_executor(None, func, *args)
+
+class DisconnectionException(Exception):
+	"""An exception that is raised if we are disconnected from the jstris server."""
+
+class QuitException(Exception):
+	"""An exception that is raised if we have quit."""
+
+class Jstris(GameInterface):
 	"""Handles the interaction with the jstris website."""
 	def __init__(self):
 		profile = FirefoxProfile()
 		profile.set_preference('media.volume_scale', '0.0') # Mute audio
 		self.driver = Firefox(firefox_profile=profile)
 
-		self.timeout = 10
 		self.clients = None
 		self.players = None
-		self.lobby = None
+		self.join_link = None
+		self.state = GameState.STOPPED
 
-	def reset(self):
-		self.clients = None
-		self.players = None
-		self.lobby = None
+		self.quit_flag = False
 
-	async def get_lobby(self):
-		"""Get the current lobby, or create a new one. Returns the join link."""
-		if self.lobby is not None:
-			return self.lobby
+	async def create_game(self, live=False):
+		await _run_in_executor(self._create_game)
+		self.state = GameState.CREATED
 
-		loop = asyncio.get_running_loop()
-		join_link = await loop.run_in_executor(None, self.__get_lobby)
-		return join_link
+		return self.get_join_link()
 
-	def __get_lobby(self):
-		if self.lobby is None:
-			self.__log_in()
-			self.lobby = self.__set_up_lobby()
+	def get_join_link(self):
+		return self.join_link
 
-		return self.lobby
+	async def watch_and_get_results(self):
+		self.state = GameState.WATCHING
 
-	async def log_in(self):
-		"""Usually unneeded, logs in"""
-		loop = asyncio.get_running_loop()
-		await loop.run_in_executor(None, self.__log_in)
+		while self.state != GameState.STOPPED and not self.quit_flag:
+			try:
+				result = await self._run_a_match()
+				yield result
+			except QuitException:
+				break
+		await _run_in_executor(self._log_in)
 
-	def __log_in(self):
-		self.reset()
+	async def quit(self): #TODO implement quit
+		self.quit_flag = True
+
+	async def force_quit(self): #TODO make this not break everything
+		await _run_in_executor(self._log_in)
+		self.quit_flag = True
+
+	def get_state(self):
+		return self.state
+
+	###############################################################################
+	# Private methods
+	###############################################################################
+
+	# Methods to create rooms
+
+	def _create_game(self, live=False):
+		"""Handles the whole set-up of creating or joining a new game"""
+		self._log_in()
+		if live:
+			self._go_to_live()
+		else:
+			self._create_lobby()
+
+		# Go to spectator mode
+		self._send_chat('/spec', private_only=False)
+
+	def _log_in(self):
+		"""Ensures we are logged in, exits any lobby"""
+		self._reset_game_info()
+
 		self.driver.get(JSTRIS_URL + '/login')
 		if jstris_creds['username'] in self.driver.title:
 			return
 
 		self.driver.find_element_by_name('name').send_keys(jstris_creds['username'])
 		self.driver.find_element_by_name('password').send_keys(jstris_creds['password'] + Keys.ENTER)
-		self.wait(EC.title_contains(jstris_creds['username']))
+		self._wait(EC.title_contains(jstris_creds['username']))
 
-	def __set_up_lobby(self):
-		"""Create a new private game lobby. Returns the join link for that lobby."""
-		self.__reset_lobby_info()
-		self.__go_to_practice()
-		join_link = self.__create_lobby()
+	def _reset_game_info(self):
+		"""Reset any info we get in a game"""
+		self.clients = None
+		self.players = None
+		self.join_link = None
+		self.state = GameState.STOPPED
 
-		# Go to spectator mode
-		self.send_chat('/spec')
-		return join_link
+		self.quit_flag = False
 
-	def __create_lobby(self):
+	def _go_to_live(self):
+		"""Goes to live, mocks private lobby."""
+		self._log_in()
+		self.driver.get(JSTRIS_URL)
+		self._setup_script()
+		self.join_link = 'live'
+
+	def _create_lobby(self):
 		"""Handles private game lobby creation."""
+		self._go_to_practice()
+
 		# Create a new lobby
-		self.__click_button('lobby')
-		self.__click_button('createRoomButton')
+		self._click_button('lobby')
+		self._click_button('createRoomButton')
 
 		# TODO Think about setting a preset? When things are more set in stone? Settings:
-		self.__check_box('isPrivate')
-		self.__select_radio('more_adv') # More settings: "All"
-		self.__check_box('hostStart')
-		self.__click_button('create')
+		self._check_box('isPrivate')
+		self._select_radio('more_adv') # More settings: "All"
+		self._check_box('hostStart')
+		self._click_button('create')
 
 		# Waits for lobby to load and gets a useful value
-		join_link = self.__get_join_link()
-		self.__setup_script()
+		self.join_link = self._get_join_link()
+		self._setup_script()
 
-		return join_link
-
-	async def go_to_live(self):
-		"""Go to a live public game lobby."""
-		loop = asyncio.get_running_loop()
-		await loop.run_in_executor(None, self.__go_to_live)
-
-		signedin_xpath = '//div[@class="chl srv"][contains(text(), "You are signed in as")]'
-		await self.async_wait(EC.presence_of_element_located((By.XPATH, signedin_xpath)))
-
-	def __go_to_live(self):
-		self.__log_in()
-		self.driver.get(JSTRIS_URL)
-		self.__setup_script()
-
-	async def go_to_practice(self):
-		"""Go to a practice room."""
-		loop = asyncio.get_running_loop()
-		return await loop.run_in_executor(None, self.__go_to_practice)
-
-	def __go_to_practice(self):
+	def _go_to_practice(self):
 		self.driver.get(JSTRIS_URL + '/?play=2')
 
 		# Wait for auto practice game to start... Find element that says GO! and wait for it to disappear
 		ready_go_xpath = '//div[@id="stage"]/div[@class="gCapt"][last()]'
-		self.wait(EC.visibility_of_element_located((By.XPATH, ready_go_xpath)))
-		self.wait(EC.invisibility_of_element((By.XPATH, ready_go_xpath)))
+		self._wait(EC.visibility_of_element_located((By.XPATH, ready_go_xpath)))
+		self._wait(EC.invisibility_of_element((By.XPATH, ready_go_xpath)))
 
-	def __reset_lobby_info(self):
-		self.clients = None
-		self.players = None
-		self.lobby = None
+	def _get_join_link(self):
+		"""Wait for a join link to appear on the page, and return the URL contained within it."""
+		join_link = self._wait(EC.presence_of_element_located((By.CLASS_NAME, 'joinLink')))
+		return join_link.text
 
-	def __setup_script(self):
+	def _setup_script(self):
 		"""Inject custom javascript onto the lobby page to keep track of the game state."""
 		self.driver.execute_script("""
 			window.game = null;
@@ -140,93 +164,102 @@ class Jstris:
 			Live.prototype.displayResults = function() {
 				dr.apply(this, arguments);
 				window.gameResults = arguments[0];
-				console.log("Game ended!"); // TODO remove
 			};""")
-		time.sleep(0.1)
+		time.sleep(0.1) #TODO hacky
 
-	async def start_game_live(self):
-		"""Simulate starting a game (when we're watching live)."""
-		loop = asyncio.get_running_loop()
-		await loop.run_in_executor(None, self.__start_game_setup)
+	# Methods involved in running a match
 
-	async def start_game(self):
-		"""Start a game in the private room."""
-		if await self.wait_for_ok_to_start_game():
-			loop = asyncio.get_running_loop()
-			await loop.run_in_executor(None, self.__start_game)
+	async def _run_a_match(self):
+		while await self._wait_for_ok_to_start_game():
+			if not self._have_players_joined() or not await _run_in_executor(self._start_game):
+				self.state = GameState.WATCHING
+				print('ERROR: Hmm... wait for ok to start game worked, but players haven\'t joined?')
+				sys.stdout.flush()
+				continue
 
-			if self.is_ok_to_start_game():
-				self.send_chat("Starting now!")
-				return True
+			self._send_chat("Starting now!")
+			self.state = GameState.RUNNING
+			result = await self._wait_for_game_end()
+			self.state = GameState.WATCHING
+			return result
+		return None
 
-		return False
-
-	async def wait_for_ok_to_start_game(self):
-		"""Wait for at least two players to join, and count down to game start, sending requisite chat messages.
-
-		Requires being in a private lobby.
+	async def _wait_for_ok_to_start_game(self):
+		"""Wait for at least two registered players to join, and count down in chat to game start.
 
 		Returns True if/when we can start the game, or False otherwise (if we time out)."""
 		wait_time = 300
 		wait_incr = 60
-		periodic_msg = "Will wait for up to {:d}s for at least two players to join."
+		periodic_msg = "Will wait for up to {:d}s for at least two registered players to join."
 		start_time = time.perf_counter()
 		end_time = start_time + wait_time
 
 		while time.perf_counter() < end_time:
-			if not self.is_ok_to_start_game():
+			if not self._have_players_joined():
 				now = time.perf_counter()
 				incrs_waited = int((now - start_time) / wait_incr)
 				time_to_wait = (incrs_waited + 1) * wait_incr + start_time - now
-				self.send_chat(periodic_msg.format(int(round(end_time - now))))
+				self._send_chat(periodic_msg.format(int(round(end_time - now))))
 
 				try:
-					await self._wait_for_ok_to_start_game(time_to_wait)
+					await self._wait_for_players_to_join(time_to_wait)
 				except TimeoutException:
 					continue
 
-			if await self.count_down_to_start_game():
+			if await self._count_down_to_start_game():
 				return True
 
-		self.send_chat("Not enough players to start game.")
+		self._send_chat("Not enough registered players to start game.")
 		return False
 
-	async def count_down_to_start_game(self):
-		"""Count down to the game start, checking intermittently if is_ok_to_start_game."""
+	_HAVE_TWO_PLAYERS_JOINED_JS = r"""
+		var players = [];
+		for (var i = 0; i < game.Live.players.length; i++) {
+			var player = game.Live.players[i];
+			var regex = /^<a href="\/u\/.+" target="_blank">.*<\/a>$/;
+			if (game.Live.getName(player).match(regex)) {
+				players.push(player);
+			}
+		}
+		return players.length >= 2;
+		"""
+
+	def _have_players_joined(self):
+		"""Check if 2 registered players have joined."""
+		return self.driver.execute_script(Jstris._HAVE_TWO_PLAYERS_JOINED_JS)
+
+	async def _wait_for_players_to_join(self, timeout):
+		"""Wait for 2 registered players to join, using async_wait."""
+		return await self._async_wait_js(Jstris._HAVE_TWO_PLAYERS_JOINED_JS, timeout=timeout)
+
+	async def _count_down_to_start_game(self):
+		"""Count down to the game start, checking intermittently if _have_players_joined()."""
 		wait_time = 30
 		wait_incr = 10
 		time_waited = 0
 		starting_in = 'Starting next game in {:d} seconds...'
 
 		while time_waited < wait_time:
-			if not self.is_ok_to_start_game():
+			if not self._have_players_joined():
 				return False
 
-			self.send_chat(starting_in.format(wait_time - time_waited))
+			self._send_chat(starting_in.format(wait_time - time_waited))
 			await asyncio.sleep(wait_incr)
 			time_waited += wait_incr
 
-		return self.is_ok_to_start_game()
+		return self._have_players_joined()
 
-	async def _wait_for_ok_to_start_game(self, timeout):
-		"""Wait for 2 players to join, using async_wait."""
-		return await self.async_wait(lambda driver: driver.execute_script("return game.Live.players.length >= 2"),
-		                             timeout=timeout)
-
-	def is_ok_to_start_game(self):
-		return self.driver.execute_script("return game.Live.players.length >= 2")
-
-	def __start_game(self):
-		self.__click_button('res')
-		self.__start_game_setup()
+	def _start_game(self):
+		self._click_button('res')
+		self._start_game_setup()
 		return len(self.players) >= 2
 
-	def __start_game_setup(self):
+	def _start_game_setup(self):
 		self.driver.execute_script("window.gameResults = null")
-		self.clients = self.get_clients()
+		self.clients = self._get_clients()
 
 		self.players = set()
-		player_ids = self.get_registered_players()
+		player_ids = self._get_registered_players()
 		for player_id in player_ids:
 			self.players.add(player_id)
 
@@ -234,15 +267,23 @@ class Jstris:
 		print(set(self.clients.get(pid, "UNKNOWN") for pid in self.players))
 		sys.stdout.flush()
 
-	async def wait_for_game_end(self):
+	async def _wait_for_game_end(self):
 		"""Wait for a tetris game to end."""
 		while True:
-			self.check_connection()
-			if self.has_game_ended():
-				return
+			self._check_connection()
+			if self._has_game_ended():
+				return self._get_game_results()
 			await asyncio.sleep(0.5)
 
-	def get_game_results(self):
+	def _check_connection(self):
+		"""Raise an exception if the client javascript thinks we are disconnected."""
+		self._wait_js("return window.game != null && window.game.Live.connected")
+
+	def _has_game_ended(self):
+		"""Returns True if a game has ended since calling start_game()"""
+		return self.driver.execute_script("return gameResults != null")
+
+	def _get_game_results(self):
 		"""Get the results of the last game that was played in this room."""
 		results = self.driver.execute_script("return window.gameResults")
 		self.driver.execute_script("window.oldGameResults = window.gameResults")
@@ -274,7 +315,16 @@ class Jstris:
 
 		return results_list
 
-	def get_clients(self):
+	###############################################################################
+	# Utility methods
+	###############################################################################
+
+	def _send_chat(self, text, private_only=True):
+		"""Send text to the chat box."""
+		if self.join_link != "live" or not private_only:
+			self.driver.find_element_by_id('chatInput').send_keys(text + Keys.ENTER)
+
+	def _get_clients(self):
 		"""Get the list of other people in the room, players or spectators.
 
 		Returns a dictionary of player_id -> player_name
@@ -292,7 +342,7 @@ class Jstris:
 			clients[int(pid_str)] = name
 		return clients
 
-	def get_registered_players(self):
+	def _get_registered_players(self):
 		"""Get the list of players who are logged in."""
 		return self.driver.execute_script(r"""
 			var players = [];
@@ -306,67 +356,36 @@ class Jstris:
 			return players;
 		""")
 
-	def get_player_ids(self):
-		"""Get the list of player ids of players playing, who have lost, or are waiting for a game."""
-		return self.driver.execute_script("return game.Live.players")
-
-	def check_connection(self):
-		"""Raise an exception if the client javascript thinks we are disconnected."""
-		self.wait_js("return window.game != null && window.game.Live.connected")
-
-	def has_game_ended(self):
-		"""Returns True if a game has ended since calling start_game()"""
-		return self.driver.execute_script("return gameResults != null")
-
-	def enter_spectator_mode(self):
-		"""Send /spec to the chat, entering spectator mode."""
-		self.send_chat('/spec')
-
-	def send_chat(self, text):
-		"""Send text to the chat box."""
-		self.driver.find_element_by_id('chatInput').send_keys(text + Keys.ENTER)
-
-	def __click_button(self, element_id):
+	def _click_button(self, element_id):
 		"""Click a button on the page by element id."""
 		self.driver.find_element_by_id(element_id).click()
 
-	def __select_radio(self, element_id):
+	def _select_radio(self, element_id):
 		"""Select a radio option on the page by element id."""
 		self.driver.find_element_by_id(element_id).click()
 
-	def __check_box(self, element_id):
+	def _check_box(self, element_id):
 		"""Check a checkbox on the page by element id."""
 		box = self.driver.find_element_by_id(element_id)
 		if not box.is_selected():
 			box.click()
 
-	def __uncheck_box(self, element_id):
+	def _uncheck_box(self, element_id):
 		"""Uncheck a checkbox on the page by element id."""
 		box = self.driver.find_element_by_id(element_id)
 		if box.is_selected():
 			box.click()
 
-	def __get_join_link(self):
-		"""Wait for a join link to appear on the page, and return the URL contained within it."""
-		#join_link = await self.async_wait(EC.presence_of_element_located((By.CLASS_NAME, 'joinLink')))
-		join_link = self.wait(EC.presence_of_element_located((By.CLASS_NAME, 'joinLink')))
-		return join_link.text
-
-	def wait(self, condition, timeout=None):
+	def _wait(self, condition, timeout=10):
 		"""Wait for a condition on the current webpage."""
-		if timeout is None:
-			timeout = self.timeout
-		return WebDriverWait(self.driver, self.timeout).until(condition)
+		return WebDriverWait(self.driver, timeout).until(condition)
 
-	def wait_js(self, javascript, timeout=None):
+	def _wait_js(self, javascript, timeout=10):
 		"""Wait for a javascript expression to return true."""
-		return self.wait(lambda driver: driver.execute_script(javascript), timeout=timeout)
+		return self._wait(lambda driver: driver.execute_script(javascript), timeout=timeout)
 
-	async def async_wait(self, condition, message='', timeout=None):
+	async def _async_wait(self, condition, message='', timeout=10):
 		"""Wait for a condition on the current webpage."""
-		if timeout is None:
-			timeout = self.timeout
-
 		end_time = time.perf_counter() + timeout
 		screen = None
 		stacktrace = None
@@ -382,12 +401,6 @@ class Jstris:
 			if time.perf_counter() > end_time:
 				raise TimeoutException(message, screen, stacktrace)
 
-	async def async_wait_js(self, javascript, timeout=None):
+	async def _async_wait_js(self, javascript, timeout=10):
 		"""Wait for a javascript expression to return true."""
-		return await self.async_wait(lambda driver: driver.execute_script(javascript), timeout=timeout)
-
-class DisconnectionException(Exception):
-	"""An exception that is raised if we are disconnected from the jstris server."""
-
-#class TimeoutException(Exception):
-#	"""An exception that is raised if we are timed out while waiting for something."""
+		return await self._async_wait(lambda driver: driver.execute_script(javascript), timeout=timeout)
