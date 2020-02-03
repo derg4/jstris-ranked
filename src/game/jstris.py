@@ -44,7 +44,7 @@ class Jstris(GameInterface):
 		self.quit_flag = False
 
 	async def create_game(self, live=False):
-		await _run_in_executor(self._create_game)
+		await _run_in_executor(self._create_game, live)
 		self.state = GameState.CREATED
 
 		return self.get_join_link()
@@ -79,7 +79,7 @@ class Jstris(GameInterface):
 
 	# Methods to create rooms
 
-	def _create_game(self, live=False):
+	def _create_game(self, live):
 		"""Handles the whole set-up of creating or joining a new game"""
 		self._log_in()
 		if live:

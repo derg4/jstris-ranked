@@ -23,7 +23,7 @@ class JstrisModel():
 		if self.jstris.state != GameState.STOPPED:
 			return
 
-		return await self.jstris.create_game(live=True)
+		return await self.jstris.create_game()
 
 	async def run_matches(self):
 		"""Runs and processes the game matches."""
