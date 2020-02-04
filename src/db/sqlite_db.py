@@ -41,6 +41,12 @@ class SQLiteDatabase(DatabaseInterface):
 		self._exec_sql('DELETE from players WHERE name=?', (name,))
 		return self
 
+	def get_ranking(self, player):
+		cursor = self._exec_sql('SELECT COUNT(*) FROM players WHERE rating > ? AND name != ?',
+		                        (player.get_rating(), player.name))
+		count = cursor.fetchone()[0]
+		return count + 1
+
 	def get_leaderboard(self, amount=20, offset=0):
 		cursor = self._exec_sql('SELECT name,rating FROM players ORDER BY rating DESC LIMIT ? OFFSET ?',
 		                        (amount, offset))

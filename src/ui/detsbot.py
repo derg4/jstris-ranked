@@ -147,9 +147,16 @@ class JstrisCog(commands.Cog):
 		               '```')
 
 	@commands.command()
-	async def rank(self, ctx, name: str):
-		"""Displays the rank and rating of the given player (jstris name)."""
-		await ctx.send('Not implemented yet!')
+	async def player(self, ctx, name: str):
+		"""Shows info about the given player (jstris name)."""
+		result = self.model.get_player_ranking(name)
+		if result is None:
+			await ctx.send('Player `{}` not found!'.format(name))
+			return
+
+		(player, ranking) = result
+		await ctx.send('Player `{}` with rating `{:.2f}` is \\#{} on the leaderboard!'.format(
+			player.name, player.rating, ranking))
 
 	@commands.command()
 	async def simulate(self, ctx, player1: str, player2: str):
@@ -171,6 +178,22 @@ class JstrisCog(commands.Cog):
 			messages.append(msg.format(p1_player, p1_winrate, p2_player, 1-p1_winrate))
 
 		await ctx.send('\n'.join(messages))
+
+	@commands.command()
+	@commands.is_owner()
+	async def reset_player(self, ctx, player: str):
+		"""Resets the given player."""
+		self.model.reset_player(player)
+		await ctx.send('Done')
+
+	@commands.command()
+	@commands.is_owner()
+	async def set_rating(self, ctx, player: str, rating: float):
+		"""Sets the rating for the given player."""
+		if self.model.set_player_rating(player, rating):
+			await ctx.send('Done')
+		else:
+			await ctx.send('Player `{}` not found!'.format(player))
 
 	@commands.command()
 	@commands.is_owner()

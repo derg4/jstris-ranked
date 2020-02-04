@@ -19,6 +19,10 @@ class DatabaseInterface(ABC):
 		"""Delete a player from the database (by name)"""
 
 	@abstractmethod
+	def get_ranking(self, player):
+		"""Get the ranking of the player by querying the database"""
+
+	@abstractmethod
 	def get_leaderboard(self, amount, offset=0):
 		"""Fetch the top <amount> players by rating (offset by [offset])"""
 

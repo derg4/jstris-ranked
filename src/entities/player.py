@@ -8,3 +8,6 @@ class Player:
 
 	def get_rating(self):
 		return int(round(self.rating))
+
+	def set_rating(self, rating):
+		self.rating = float(rating)
