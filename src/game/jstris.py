@@ -234,7 +234,7 @@ class Jstris(GameInterface):
 
 	async def _count_down_to_start_game(self):
 		"""Count down to the game start, checking intermittently if _have_players_joined()."""
-		wait_time = 30
+		wait_time = 20
 		wait_incr = 10
 		time_waited = 0
 		starting_in = 'Starting next game in {:d} seconds...'
