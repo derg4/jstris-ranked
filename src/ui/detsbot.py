@@ -10,7 +10,6 @@ from discord.ext import commands
 from discord import Game
 
 from credentials import discord_creds
-from entities import MyLogger
 
 logger = logging.getLogger('detsbot')
 
@@ -42,9 +41,10 @@ class JstrisCog(commands.Cog):
 		"""Bot event that gets called when an error occurs"""
 		logger.error('Error processing this message by {}: "{}"'.format(ctx.author, ctx.message.content))
 		logger.exception(error)
+		logger.error(''.join(traceback.format_tb(error.__traceback__)))
 
-		await ctx.send(str(error))
 		if not isinstance(error, commands.MissingRequiredArgument):
+			await ctx.send('An error occurred, and I don\'t know why. I might be broken now. Sorry :(')
 			raise error
 
 	##### Bot Commands #####################################################
@@ -93,47 +93,51 @@ class JstrisCog(commands.Cog):
 	@commands.command()
 	async def jstris(self, ctx):
 		"""Either creates a lobby for a jstris match, or sends the link to an existing lobby."""
-		if self.join_link is not None:
-			if self.quit_flag:
-				await ctx.send('Cancelled the quit command')
-				self.quit_flag = False
-			else:
-				await ctx.send('Already watching a game: {}'.format(self.join_link))
-			return
-		self.quit_flag = False
-
-		await ctx.send('Creating a lobby')
-		self.join_link = await self.model.watch_lobby()
-		await ctx.send('Join link: <%s>' % self.join_link)
-
-		async for game_result in self.model.run_matches():
-			res_strs = []
-			if game_result is None:
-				res_strs.append('No change recorded (need at least 2 registered players)')
-			else:
-				res_strs.append('   <Player Name> <Time>:   <New_Rating> (Change)')
-				for (player, score, delta) in game_result:
-					res_strs.append('%16s %6.2fs: rating %7.2f (%+5.2f)' %
-					                (player.name, float(score), player.rating, delta))
-
-			try:
-				await ctx.send('New game result:\n```%s```' % '\n'.join(res_strs))
-				# TODO: what do I do if the message is too long? >2000
-			except Exception as exc:
-				await self.model.quit_watching()
-				self.join_link = None
-				raise exc
-
-			if self.quit_flag:
-				await ctx.send('Stopping watching')
-				await self.model.quit_watching()
-				self.join_link = None
+		try:
+			if self.join_link is not None:
+				if self.quit_flag:
+					await ctx.send('Cancelled the quit command')
+					self.quit_flag = False
+				else:
+					await ctx.send('Already watching a game: {}'.format(self.join_link))
 				return
+			self.quit_flag = False
 
-		await ctx.send('Stopping watching (not enough players)')
-		await self.model.quit_watching()
-		self.join_link = None
-		return
+			await ctx.send('Creating a lobby')
+			self.join_link = await self.model.watch_lobby()
+			await ctx.send('Join link: <%s>' % self.join_link)
+
+			async for game_result in self.model.run_matches():
+				res_strs = []
+				if game_result is None:
+					res_strs.append('No change recorded (need at least 2 registered players)')
+				else:
+					res_strs.append('   <Player Name> <Time>:   <New_Rating> (Change)')
+					for (player, score, delta) in game_result:
+						res_strs.append('%16s %6.2fs: rating %7.2f (%+5.2f)' %
+								(player.name, float(score), player.rating, delta))
+
+				try:
+					await ctx.send('New game result:\n```%s```' % '\n'.join(res_strs))
+					# TODO: what do I do if the message is too long? >2000
+				except Exception as exc:
+					await self.model.quit_watching()
+					self.join_link = None
+					raise exc
+
+				if self.quit_flag:
+					await ctx.send('Stopping watching')
+					await self.model.quit_watching()
+					self.join_link = None
+					return
+
+			await ctx.send('Stopping watching (not enough players)')
+			await self.model.quit_watching()
+			self.join_link = None
+		except Exception as exc:
+			logger.exception(exc)
+			logger.error('d/jstris error:' + ''.join(traceback.format_tb(exc.__traceback__)))
+			raise exc
 
 	@commands.command()
 	async def leaderboard(self, ctx, page: int = 1):

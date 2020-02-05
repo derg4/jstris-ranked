@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 """Handles the interaction with the jstris website."""
 
+import logging
 import pprint
 import sys
 import time
@@ -18,6 +19,7 @@ from credentials import jstris_creds
 from model import GameInterface, GameState
 
 JSTRIS_URL = 'https://jstris.jezevec10.com'
+logger = logging.getLogger('detsbot')
 
 async def _run_in_executor(func, *args):
 	loop = asyncio.get_running_loop()
@@ -58,7 +60,8 @@ class Jstris(GameInterface):
 		while self.state != GameState.STOPPED and not self.quit_flag:
 			try:
 				result = await self._run_a_match()
-				yield result
+				if result is not None:
+					yield result
 			except QuitException:
 				break
 		await _run_in_executor(self._log_in)
@@ -173,8 +176,7 @@ class Jstris(GameInterface):
 		while await self._wait_for_ok_to_start_game():
 			if not self._have_players_joined() or not await _run_in_executor(self._start_game):
 				self.state = GameState.WATCHING
-				print('ERROR: Hmm... wait for ok to start game worked, but players haven\'t joined?')
-				sys.stdout.flush()
+				logger.error('Hmm... wait for ok to start game worked, but players haven\'t joined?')
 				continue
 
 			self._send_chat("Starting now!")
@@ -182,6 +184,7 @@ class Jstris(GameInterface):
 			result = await self._wait_for_game_end()
 			self.state = GameState.WATCHING
 			return result
+		self.quit_flag = True
 		return None
 
 	async def _wait_for_ok_to_start_game(self):
