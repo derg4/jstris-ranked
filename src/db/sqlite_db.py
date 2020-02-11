@@ -47,6 +47,10 @@ class SQLiteDatabase(DatabaseInterface):
 		count = cursor.fetchone()[0]
 		return count + 1
 
+	def count_players(self):
+		cursor = self._exec_sql('SELECT COUNT(*) FROM players')
+		return cursor.fetchone()[0]
+
 	def get_leaderboard(self, amount=20, offset=0):
 		cursor = self._exec_sql('SELECT name,rating FROM players ORDER BY rating DESC LIMIT ? OFFSET ?',
 		                        (amount, offset))

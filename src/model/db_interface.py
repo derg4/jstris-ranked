@@ -27,6 +27,10 @@ class DatabaseInterface(ABC):
 		"""Fetch the top <amount> players by rating (offset by [offset])"""
 
 	@abstractmethod
+	def count_players(self):
+		"""Returns the number of players in the database"""
+
+	@abstractmethod
 	def create_game(self, game):
 		"""Save a game to the database"""
 

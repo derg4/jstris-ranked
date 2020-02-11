@@ -1,6 +1,8 @@
 #! /usr/bin/env python3
 """Mediates the interaction between UI (detsbot) and other layers (jstris, elo, etc)."""
 
+import math
+
 from entities import Elo
 from model import GameInterface, GameState
 
@@ -66,7 +68,8 @@ class JstrisModel():
 
 	def get_leaderboard(self, page=1, page_size=20):
 		"""Returns a list of the top rated players (20 per page by default)."""
-		return self.db.get_leaderboard(page_size, (page - 1) * page_size)
+		return (list(self.db.get_leaderboard(page_size, (page - 1) * page_size)),
+		        int(math.ceil(self.db.count_players() / page_size)))
 
 	def simulate_1v1(self, player1, player2):
 		"""Returns player1's estimated winrate against player2."""

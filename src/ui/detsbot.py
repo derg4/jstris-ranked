@@ -6,8 +6,9 @@ import logging
 import sys
 import traceback
 
+import discord
 from discord.ext import commands
-from discord import Game
+from discord import Embed, Game
 
 from credentials import discord_creds
 
@@ -39,13 +40,19 @@ class JstrisCog(commands.Cog):
 	@commands.Cog.listener()
 	async def on_command_error(self, ctx, error):
 		"""Bot event that gets called when an error occurs"""
-		logger.error('Error processing this message by {}: "{}"'.format(ctx.author, ctx.message.content))
-		logger.exception(error)
-		logger.error(''.join(traceback.format_tb(error.__traceback__)))
 
-		if not isinstance(error, commands.MissingRequiredArgument):
-			await ctx.send('An error occurred, and I don\'t know why. I might be broken now. Sorry :(')
-			raise error
+		if isinstance(error, discord.DiscordException):
+			logger.warning('Error processing message %s: "%s", "%s"',
+			               ctx.author, ctx.message.content, str(error))
+			logger.warning(''.join(traceback.format_tb(error.__traceback__)))
+
+			await ctx.send(str(error))
+		else:
+			logger.error('Error processing message %s: "%s", "%s"',
+			             ctx.author, ctx.message.content, str(error))
+			logger.error(''.join(traceback.format_tb(error.__traceback__)))
+
+			await ctx.send('An error occurred processing your command, and it has been logged')
 
 	##### Bot Commands #####################################################
 
@@ -142,13 +149,17 @@ class JstrisCog(commands.Cog):
 	@commands.command()
 	async def leaderboard(self, ctx, page: int = 1):
 		"""Displays the top rated players."""
-		page_size = 10
-		players = self.model.get_leaderboard(page, page_size)
-		await ctx.send('```        <Player Name>: <Rating>\n' +
-		               '\n'.join('#%-3d %16s: %7.2f' %
-		                         ((i + 1 + page_size * (page - 1)), player.name, player.rating)
-		                         for (i, player) in enumerate(players)) +
-		               '```')
+		page_size = 15
+		(players, num_pages) = self.model.get_leaderboard(page, page_size)
+
+		if len(players) == 0 or page <= 0:
+			await ctx.send('"page" should be a number from 1 to {}'.format(num_pages))
+		else:
+			desc = '\n'.join('**#{0}: {1.name}** ({1.rating:.2f})'.format(i + 1 + page_size*(page - 1), player)
+			                 for (i, player) in enumerate(players))
+			embed = Embed(title='Detstris Leaderboard', description=desc)
+			embed.set_footer(text='Page {} / {}'.format(page, num_pages))
+			await ctx.send(embed=embed)
 
 	@commands.command()
 	async def player(self, ctx, name: str):
