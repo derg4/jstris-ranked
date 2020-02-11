@@ -120,6 +120,7 @@ class Jstris(GameInterface):
 		self.driver.get(JSTRIS_URL)
 		self._setup_script()
 		self.join_link = 'live'
+		time.sleep(2)
 
 	def _create_lobby(self):
 		"""Handles private game lobby creation."""

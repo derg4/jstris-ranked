@@ -74,17 +74,8 @@ class JstrisCog(commands.Cog):
 		await self.model.watch_live()
 
 		async for game_result in self.model.run_matches():
-			res_strs = []
-			if game_result is None:
-				res_strs.append('No change recorded (need at least 2 registered players)')
-			else:
-				res_strs.append('<Player> <Time>: <New_Rating> (Change)')
-				for (player, score, delta) in game_result:
-					res_strs.append('%16s %6.2fs: rating %7.2f (%+5.2f)' %
-					                (player.name, float(score), player.rating, delta))
-
 			try:
-				await ctx.send('New game result:\n```%s```' % '\n'.join(res_strs))
+				await ctx.send(embed=JstrisCog.make_game_result_embed(game_result))
 				# TODO: what do I do if the message is too long? >2000
 			except Exception as exc:
 				await self.model.quit_watching()
@@ -97,7 +88,30 @@ class JstrisCog(commands.Cog):
 				self.join_link = None
 				return
 
-	@commands.command()
+	@staticmethod
+	def make_game_result_embed(game_result):
+		res_strs = []
+		if game_result is None:
+			res_strs.append('No change recorded (need at least 2 registered players)')
+		else:
+			last_place = None
+			last_score = None
+
+			for (i, (player, score, delta)) in enumerate(game_result):
+				place = None
+				if last_score is not None and score == last_score:
+					place = last_place
+				else:
+					place = '#' + str(i + 1)
+					last_place = place
+					last_score = score
+
+				if score == 0.0:
+					place = 'DQ'
+				res_strs.append('**{} - {}**: {:.2f} ({:.2f})'.format(place, player.name, player.rating, delta))
+		return Embed(title='New Game Result', description='\n'.join(res_strs))
+
+	@commands.command(aliases=['tetris'])
 	async def jstris(self, ctx):
 		"""Either creates a lobby for a jstris match, or sends the link to an existing lobby."""
 		try:
@@ -115,17 +129,8 @@ class JstrisCog(commands.Cog):
 			await ctx.send('Join link: <%s>' % self.join_link)
 
 			async for game_result in self.model.run_matches():
-				res_strs = []
-				if game_result is None:
-					res_strs.append('No change recorded (need at least 2 registered players)')
-				else:
-					res_strs.append('   <Player Name> <Time>:   <New_Rating> (Change)')
-					for (player, score, delta) in game_result:
-						res_strs.append('%16s %6.2fs: rating %7.2f (%+5.2f)' %
-								(player.name, float(score), player.rating, delta))
-
 				try:
-					await ctx.send('New game result:\n```%s```' % '\n'.join(res_strs))
+					await ctx.send(embed=JstrisCog.make_game_result_embed(game_result))
 					# TODO: what do I do if the message is too long? >2000
 				except Exception as exc:
 					await self.model.quit_watching()
@@ -155,7 +160,7 @@ class JstrisCog(commands.Cog):
 		if len(players) == 0 or page <= 0:
 			await ctx.send('"page" should be a number from 1 to {}'.format(num_pages))
 		else:
-			desc = '\n'.join('**#{0}: {1.name}** ({1.rating:.2f})'.format(i + 1 + page_size*(page - 1), player)
+			desc = '\n'.join('**#{0} - {1.name}** ({1.rating:.2f})'.format(i + 1 + page_size*(page - 1), player)
 			                 for (i, player) in enumerate(players))
 			embed = Embed(title='Detstris Leaderboard', description=desc)
 			embed.set_footer(text='Page {} / {}'.format(page, num_pages))
