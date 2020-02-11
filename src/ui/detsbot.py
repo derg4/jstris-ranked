@@ -108,7 +108,7 @@ class JstrisCog(commands.Cog):
 
 				if score == 0.0:
 					place = 'DQ'
-				res_strs.append('**{} - {}**: {:.2f} ({:.2f})'.format(place, player.name, player.rating, delta))
+				res_strs.append('**{} - {}**: {:.2f} ({:+.2f})'.format(place, player.name, player.rating, delta))
 		return Embed(title='New Game Result', description='\n'.join(res_strs))
 
 	@commands.command(aliases=['tetris'])
